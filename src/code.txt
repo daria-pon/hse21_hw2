@@ -1,0 +1,330 @@
+#геном бактерии
+!wget https://raw.githubusercontent.com/daria-pon/hse21_hw1/main/scaffolds.fasta
+#GeneMark
+!wget http://topaz.gatech.edu/GeneMark/tmp/GMtool_YdDU0/gms2_linux_64.tar.gz
+!wget http://topaz.gatech.edu/GeneMark/tmp/GMtool_YdDU0/gm_key_64.gz
+!gzip -d gm_key_64.gz
+!tar -xzvf gms2_linux_64.tar.gz
+!cp  -v  gm_key_64   ~/.gmhmmp2_key
+#еще программа
+!sh -c "$(curl -fsSL ftp://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"
+#данные близкородственной бактерии
+!$HOME/edirect/efetch -db nuccore -id HF680312 -format gb  >  T_oleivorans_MIL_1.gbk
+!$HOME/edirect/efetch -db nuccore -id HF680312 -format fasta_cds_aa  >  T_oleivorans_MIL_1.proteins.fasta
+!$HOME/edirect/efetch -db nuccore -id HF680312 -format gene_fasta  >  T_oleivorans_MIL_1.genes.fasta
+#BLAST
+!apt-get update
+!apt-get install ncbi-blast+
+#Swissprot
+!wget https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz
+!gzip -d uniprot_sprot.fasta.gz
+#seqkit
+!wget https://github.com/shenwei356/seqkit/releases/download/v2.1.0/seqkit_linux_amd64.tar.gz
+!tar -xzvf seqkit_linux_amd64.tar.gz
+!chmod a+x seqkit
+#Расположение белок-кодирующих генов
+!./gms2_linux_64/gms2.pl  --seq scaffolds.fasta  --genome-type bacteria  --fnn genes.fasta  --faa proteins.fasta
+#функции белков
+!makeblastdb  -dbtype prot  -in T_oleivorans_MIL_1.proteins.fasta  -out T_oleivorans_MIL_1.proteins
+!blastp  -query proteins.fasta  -db T_oleivorans_MIL_1.proteins  -evalue 1e-10  -outfmt 6  >  scaffolds.hits_from_MIL_1.txt
+#белки, которые имеют сходство с MIL1
+!cut -f 1 scaffolds.hits_from_MIL_1.txt | sort -n | uniq > proteins.with_hits_from_MIL_1.txt
+!./seqkit grep  --invert-match  -f proteins.with_hits_from_MIL_1.txt  proteins.fasta   -o proteins.without_MIL_1.fasta
+!grep '>' proteins.fasta | wc -l
+!wc -l proteins.with_hits_from_MIL_1.txt
+!grep '>' proteins.without_MIL_1.fasta | wc -l
+#3617 - 3333 = 284, все сходится
+#поиск по SwissProt
+!makeblastdb  -dbtype prot  -in uniprot_sprot.fasta  -out uniprot_sprot
+!time  blastp  -query proteins.without_MIL_1.fasta  -db uniprot_sprot  -evalue 1e-10  -outfmt 6  >  scaffolds.hits_from_SwissProt.txt
+#52 белка
+!cut -f 1 scaffolds.hits_from_SwissProt.txt | sort | uniq | wc -l
+#второй ноутбук
+#загрузка данных с гитхаба
+!wget https://raw.githubusercontent.com/daria-pon/hse21_hw1/main/scaffolds.fasta
+!wget https://raw.githubusercontent.com/daria-pon/hse21_hw2/main/data/gms2.lst
+!wget https://raw.githubusercontent.com/daria-pon/hse21_hw2/main/data/proteins.fasta
+!wget https://raw.githubusercontent.com/daria-pon/hse21_hw2/main/data/scaffolds.hits_from_MIL_1.txt
+!wget https://raw.githubusercontent.com/daria-pon/hse21_hw2/main/data/scaffolds.hits_from_SwissProt
+#геном близкородственной бактерии
+!sh -c "$(curl -fsSL ftp://ftp.ncbi.nlm.nih.gov/entrez/entrezdirect/install-edirect.sh)"
+!$HOME/edirect/efetch -db nuccore -id HF680312 -format gb  >  T_oleivorans_MIL_1.gbk
+!pip install biopython
+a = open('gms2.lst', 'r')
+b = open ('gms2_1.lst', 'w')
+for line in a:
+  if '# ' not in line:
+    if line[0] != '\n':
+      line_new = line.lstrip()
+      line_f = b.write(line_new)
+        
+a.close()
+b.close()
+from Bio import SeqIO
+records = list(SeqIO.parse("/content/scaffolds.fasta", "fasta"))
+print(records)
+for record in records:
+  record.annotations['molecule_type'] = 'DNA'
+SeqIO.write(records, "GENOME.gbk", "genbank")
+#добавить координаты генов
+from pprint import pprint
+from Bio.SeqFeature import SeqFeature, FeatureLocation
+#scaffold1_cov231, первую строчку удалила вручную
+genes_1 = []
+a = open('gms2_1.lst', 'r')
+for line in a:
+  if 'scaffold2_cov202' in line:
+    break
+  line_list = line.split()
+  if '<' in line_list[2]:
+    c = int(line_list[2][1:])
+  else:
+    c = int(line_list[2])
+  if '>' in line_list[3]:
+    d = int(line_list[3][1:])
+  else:
+    d = int(line_list[3])
+  if line_list[1] == '-':
+    e = -1
+  elif line_list[1] == '+':
+    e = 1
+  new_sc = SeqFeature(FeatureLocation(c, d, strand = e), type = 'CDS')
+  new_sc.qualifiers['locus_tag'] = [line_list[0]]
+  genes_1.append(new_sc)
+#scaffold2_cov202
+genes_2 = []
+for line in a:
+  if 'scaffold3_cov128' in line:
+    break
+  line_list = line.split()
+  if '<' in line_list[2]:
+    c = int(line_list[2][1:])
+  else:
+    c = int(line_list[2])
+  if '>' in line_list[3]:
+    d = int(line_list[3][1:])
+  else:
+    d = int(line_list[3])
+  if line_list[1] == '-':
+    e = -1
+  elif line_list[1] == '+':
+    e = 1
+  new_sc = SeqFeature(FeatureLocation(c, d, strand = e), type = 'CDS')
+  new_sc.qualifiers['locus_tag'] = [line_list[0]]
+  genes_2.append(new_sc)
+#scaffold3_cov128
+genes_3 = []
+for line in a:
+  if 'scaffold4_cov389' in line:
+    break
+  line_list = line.split()
+  if '<' in line_list[2]:
+    c = int(line_list[2][1:])
+  else:
+    c = int(line_list[2])
+  if '>' in line_list[3]:
+    d = int(line_list[3][1:])
+  else:
+    d = int(line_list[3])
+  if line_list[1] == '-':
+    e = -1
+  elif line_list[1] == '+':
+    e = 1
+  new_sc = SeqFeature(FeatureLocation(c, d, strand = e), type = 'CDS')
+  new_sc.qualifiers['locus_tag'] = [line_list[0]]
+  genes_3.append(new_sc)
+records[0].features = genes_1
+records[1].features = genes_2
+records[2].features = genes_3
+genes_4 = []
+for line in a:
+  if 'SequenceID' in line:
+    continue
+  line_list = line.split()
+  if '<' in line_list[2]:
+    c = int(line_list[2][1:])
+  else:
+    c = int(line_list[2])
+  if '>' in line_list[3]:
+    d = int(line_list[3][1:])
+  else:
+    d = int(line_list[3])
+  if line_list[1] == '-':
+    e = -1
+  elif line_list[1] == '+':
+    e = 1
+  new_sc = SeqFeature(FeatureLocation(c, d, strand = e), type = 'CDS')
+  new_sc.qualifiers['locus_tag'] = [line_list[0]]
+  genes_4.append(new_sc)
+a.close()
+records[16].features = [genes_4[11], genes_4[12], genes_4[13]]
+records[17].features = [genes_4[14], genes_4[15], genes_4[16]]
+records[21].features = [genes_4[20], genes_4[21]]
+records[22].features = [genes_4[22], genes_4[23], genes_4[24]]
+records[23].features = [genes_4[25], genes_4[26], genes_4[27]]
+records[42].features = [genes_4[43], genes_4[44]]
+records[3].features = [genes_4[0]]
+records[4].features = [genes_4[1]]
+records[5].features = [genes_4[2]]
+records[6].features = [genes_4[3]]
+records[7].features = [genes_4[4]]
+records[8].features = [genes_4[5]]
+records[9].features = [genes_4[6]]
+records[10].features = [genes_4[7]]
+records[11].features = [genes_4[8]]
+records[12].features = [genes_4[9]]
+records[13].features = [genes_4[10]]
+records[14].features = []
+records[15].features = []
+records[18].features = [genes_4[17]]
+records[19].features = [genes_4[18]]
+records[20].features = [genes_4[19]]
+records[24].features = [genes_4[28]]
+records[25].features = []
+records[26].features = [genes_4[29]]
+records[27].features = [genes_4[30]]
+records[28].features = [genes_4[31]]
+records[29].features = [genes_4[32]]
+records[30].features = [genes_4[33]]
+records[31].features = [genes_4[34]]
+records[32].features = [genes_4[35]]
+records[33].features = [genes_4[36]]
+records[34].features = []
+records[35].features = [genes_4[37]]
+records[36].features = [genes_4[38]]
+records[37].features = []
+records[38].features = [genes_4[39]]
+records[39].features = [genes_4[40]]
+records[40].features = [genes_4[41]]
+records[41].features = [genes_4[42]]
+records[43].features = [genes_4[45]]
+records[44].features = [genes_4[46]]
+records[45].features = [genes_4[47]]
+records[46].features = []
+records[47].features = [genes_4[48]]
+records[48].features = []
+records[49].features = [genes_4[49]]
+records[50].features = [genes_4[50]]
+records[51].features = [genes_4[51]]
+records[52].features = [genes_4[52]]
+records[53].features = [genes_4[53]]
+records[54].features = [genes_4[54]]
+records[55].features = [genes_4[55]]
+records[56].features = [genes_4[56]]
+records[57].features = [genes_4[57]]
+records[58].features = [genes_4[58]]
+records[59].features = [genes_4[59]]
+records[60].features = []
+records[61].features = [genes_4[60]]
+records[62].features = [genes_4[61]]
+records[63].features = [genes_4[62]]
+records[64].features = [genes_4[63]]
+records[65].features = [genes_4[64]]
+records[66].features = [genes_4[65]]
+records[67].features = [genes_4[66]]
+records[68].features = [genes_4[67]]
+records[69].features = [genes_4[68]]
+SeqIO.write(records, "GENOME.gbk", "genbank")
+all_feats_1 = genes_1
+for record in SeqIO.parse("proteins.fasta", "fasta"):
+  for f in all_feats_1:
+    if record.id == f.qualifiers['locus_tag'][0]:
+      f.qualifiers['translation'] = [record.seq]
+all_feats_2 = genes_2
+for record in SeqIO.parse("proteins.fasta", "fasta"):
+  for f in all_feats_2:
+    if record.id == f.qualifiers['locus_tag'][0]:
+      f.qualifiers['translation'] = [record.seq]
+all_feats_3 = genes_3
+for record in SeqIO.parse("proteins.fasta", "fasta"):
+  for f in all_feats_3:
+    if record.id == f.qualifiers['locus_tag'][0]:
+      f.qualifiers['translation'] = [record.seq]
+all_feats_4 = genes_4
+for record in SeqIO.parse("proteins.fasta", "fasta"):
+  for f in all_feats_4:
+    if record.id == f.qualifiers['locus_tag'][0]:
+      f.qualifiers['translation'] = [record.seq]
+records[0].features = genes_1
+records[1].features = genes_2
+records[2].features = genes_3
+records[16].features = [genes_4[11], genes_4[12], genes_4[13]]
+records[17].features = [genes_4[14], genes_4[15], genes_4[16]]
+records[21].features = [genes_4[20], genes_4[21]]
+records[22].features = [genes_4[22], genes_4[23], genes_4[24]]
+records[23].features = [genes_4[25], genes_4[26], genes_4[27]]
+records[42].features = [genes_4[43], genes_4[44]]
+records[3].features = [genes_4[0]]
+records[4].features = [genes_4[1]]
+records[5].features = [genes_4[2]]
+records[6].features = [genes_4[3]]
+records[7].features = [genes_4[4]]
+records[8].features = [genes_4[5]]
+records[9].features = [genes_4[6]]
+records[10].features = [genes_4[7]]
+records[11].features = [genes_4[8]]
+records[12].features = [genes_4[9]]
+records[13].features = [genes_4[10]]
+records[14].features = []
+records[15].features = []
+records[18].features = [genes_4[17]]
+records[19].features = [genes_4[18]]
+records[20].features = [genes_4[19]]
+records[24].features = [genes_4[28]]
+records[25].features = []
+records[26].features = [genes_4[29]]
+records[27].features = [genes_4[30]]
+records[28].features = [genes_4[31]]
+records[29].features = [genes_4[32]]
+records[30].features = [genes_4[33]]
+records[31].features = [genes_4[34]]
+records[32].features = [genes_4[35]]
+records[33].features = [genes_4[36]]
+records[34].features = []
+records[35].features = [genes_4[37]]
+records[36].features = [genes_4[38]]
+records[37].features = []
+records[38].features = [genes_4[39]]
+records[39].features = [genes_4[40]]
+records[40].features = [genes_4[41]]
+records[41].features = [genes_4[42]]
+records[43].features = [genes_4[45]]
+records[44].features = [genes_4[46]]
+records[45].features = [genes_4[47]]
+records[46].features = []
+records[47].features = [genes_4[48]]
+records[48].features = []
+records[49].features = [genes_4[49]]
+records[50].features = [genes_4[50]]
+records[51].features = [genes_4[51]]
+records[52].features = [genes_4[52]]
+records[53].features = [genes_4[53]]
+records[54].features = [genes_4[54]]
+records[55].features = [genes_4[55]]
+records[56].features = [genes_4[56]]
+records[57].features = [genes_4[57]]
+records[58].features = [genes_4[58]]
+records[59].features = [genes_4[59]]
+records[60].features = []
+records[61].features = [genes_4[60]]
+records[62].features = [genes_4[61]]
+records[63].features = [genes_4[62]]
+records[64].features = [genes_4[63]]
+records[65].features = [genes_4[64]]
+records[66].features = [genes_4[65]]
+records[67].features = [genes_4[66]]
+records[68].features = [genes_4[67]]
+records[69].features = [genes_4[68]]
+SeqIO.write(records, "GENOME.gbk", "genbank")
+import numpy as np 
+import pandas as pd
+table = pd.read_table('scaffolds.hits_from_MIL_1.txt', sep = '	', names = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'])
+print(table)
+table['11'] = pd.to_numeric(table['11'])
+v = table.groupby(['1'])['11', '2'].min()
+list_prot = v['2'].to_list()
+new_list_prot = []
+for prot in list_prot:
+  new_list_prot.append(prot[prot.find('C'):prot.rfind('_')])
+print(new_list_prot)
+list_gene = v['1'].to_list()
